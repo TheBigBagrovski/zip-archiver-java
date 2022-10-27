@@ -13,24 +13,26 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.rmi.ServerError;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-//TODO() описания функций в javadoc стиле, рефакторинг, тесты (задавать аргументы командной строки в настройках)
-//TODO() zip: довести доу ма что есть, проверить ошибки в разных случаях, -p, выводить общий размер файлов и размер
-// архива в stderr
+//TODO() фикс бага с абсолютными путями
+//TODO() тесты
+//TODO() рефакторинг
+//TODO() тесты
 //todo() unzip
 //todo() slipProtect
-
+//TODO() тесты
+//TODO() описания функций в javadoc стиле, рефакторинг, тесты
 /**
  * Options:
  * -u - unzip file in files instead of zipping
  * -p - unzip archive in selected directory / create zip in selected directory
  * -a - zip all files in current directory
  * -: -a -p (userFileNames) (userPath) userArchiveName
- * u: -p userFileNames (userPath) userArchiveName
+ * -u: -p userFileNames (userPath) userArchiveName
  */
 public class Main {
 
@@ -84,7 +86,7 @@ public class Main {
 
     private void setUserArchiveName() {
         if (!isArchiveNameValid()) throw new IllegalArgumentException("Invalid archive name: " +
-                userInputs.get(userInputs.size() - 1)  + ".zip");
+                userInputs.get(userInputs.size() - 1) + ".zip");
         userArchiveName = userInputs.get(userInputs.size() - 1) + ".zip";
         userInputs.remove(userInputs.size() - 1);
         System.err.println("Archive name set: " + userArchiveName);
@@ -115,14 +117,12 @@ public class Main {
     private void setUserPath() {
         if (p) {
             userPath = userInputs.get(userInputs.size() - 1);
-            if(userPath.charAt(userPath.length()-1)!='\\') userPath += '\\';
-            Path absPath = Paths.get(userPath);
-            /*String filePath = new File("").getAbsolutePath();
-            filePath = filePath.concat(userPath);
-            Path relPath = Paths.get(filePath);*/
-            if (!Files.exists(absPath) /*&& !Files.exists(relPath)*/) throw new IllegalArgumentException("Path not found: " + userPath);
+            if (userPath.charAt(userPath.length() - 1) != '\\') userPath += '\\';
+            if (!Files.exists(Paths.get(userPath))) throw new IllegalArgumentException("Path not found: " + userPath);
             userInputs.remove(userInputs.size() - 1);
             System.err.println("Path set: " + userPath);
+        } else {
+            System.err.println("Archive will be created in current working directory");
         }
     }
 
@@ -131,7 +131,7 @@ public class Main {
             List<File> filesToZip = new ArrayList<>();
             List<String> fileNamesToZip = new ArrayList<>();
             if (a) {
-                if(!userInputs.isEmpty()) throw new IllegalArgumentException("Wrong input: -a with files");
+                if (!userInputs.isEmpty()) throw new IllegalArgumentException("Wrong input: -a with files");
                 getFilesInCurrentDir(filesToZip);
             } else {
                 getExistingFiles(filesToZip);
@@ -139,7 +139,9 @@ public class Main {
             for (File file : filesToZip) {
                 generateFileList(fileNamesToZip, file);
             }
+            System.err.println("Total file size: " + getFilesSize(filesToZip) / 1000 + " kB");
             zip(fileNamesToZip);
+            System.err.println("Archive size: " + new File(userPath + userArchiveName).length() / 1000 + " kB");
         }
     }
 
@@ -180,7 +182,6 @@ public class Main {
                 if (fileToZip.equals(userArchiveName)) continue; // skip .zip itself when -a
                 System.err.println("Zipping file: " + fileToZip);
                 zipEntry = new ZipEntry(fileToZip);
-                System.err.println(zipEntry);
                 zos.putNextEntry(zipEntry);
                 if (new File(fileToZip).isDirectory()) continue; // for empty folder
                 fis = new FileInputStream(fileToZip);
@@ -217,5 +218,20 @@ public class Main {
         String[] files = directory.list();
         if (files != null) return files.length == 0;
         else throw new IOException("Exception while getting empty folder");
+    }
+
+    private long getFilesSize(List<File> files) throws IOException {
+        long sum = 0;
+        for (File file : files) {
+            if(file.isDirectory()) {
+                sum += Files.walk(Path.of(file.getAbsolutePath()))
+                        .filter(p -> p.toFile().isFile())
+                        .mapToLong(p -> p.toFile().length())
+                        .sum();
+            } else {
+                sum += file.length();
+            }
+        }
+        return sum;
     }
 }
