@@ -196,7 +196,6 @@ public class Main {
                 if (fileName.equals(userArchiveName)) continue; // skip .zip itself when -a
                 System.err.println("Zipping file: " + fileName);
                 zipEntry = new ZipEntry(fileName);
-                System.err.println(zipEntry);
                 zos.putNextEntry(zipEntry);
                 if (new File(absPath).isDirectory()) continue; // if folder => empty folder => nothing to write
                 fis = new FileInputStream(absPath);
