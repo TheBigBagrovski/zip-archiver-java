@@ -80,6 +80,30 @@ public class Tests {
         return true;
     }
 
+    private boolean checkUnzipped(String[] expected) {
+        boolean ok = false;
+        File folder = new File("src/test/resources/output/unzipped");
+        File[] filesInFolder = folder.listFiles();
+        for (String str : expected) {
+            String correctStr = str.substring(str.lastIndexOf("\\") + 1);
+            if (filesInFolder != null) {
+                for (File file : filesInFolder) {
+                    String fileName = file.getName();
+                    if (fileName.equals(correctStr)) {
+                        ok = true;
+                        break;
+                    }
+                }
+            }
+            if (ok) {
+                ok = false;
+            } else {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private boolean compareStr(String exp, String act) {
         for (int i = 0; i < exp.length(); i++) {
             if (exp.charAt(i) != act.charAt(i)) return false;
@@ -88,7 +112,7 @@ public class Tests {
     }
 
     @Test
-    public void testZippingSpecifiedFiles() throws IOException {
+    public void testZipSpecifiedFiles() throws IOException {
         args = new String[]{pic1, video, "-p", pathToOutputs, "test1"};
         Main.main(args);
         String[] expected = {"pic1.png", "video.mp4"};
@@ -96,7 +120,7 @@ public class Tests {
     }
 
     @Test
-    public void testZippingMoreSpecifiedFiles() throws IOException {
+    public void testZipMoreSpecifiedFiles() throws IOException {
         args = new String[]{ch, dir, audio, file3, pic3, pic1, video, "-p", pathToOutputs, "test2"};
         Main.main(args);
         String[] expected = {"ch\\a\\b/", "ch\\a\\text.txt", "dir\\file2.txt", "dir\\indir\\file1.txt",
@@ -105,7 +129,7 @@ public class Tests {
     }
 
     @Test
-    public void testWrongPath() {
+    public void testZipWrongPath() {
         args = new String[]{ch, dir, audio, file3, pic3, pic1, video, "-p", wrongPath1, "test3"};
         Main.main(args);
         String expected = "Archive name set: test3.zip\r\nException while archiving\nPath not found: /path/\\\r\n";
@@ -117,7 +141,7 @@ public class Tests {
     }
 
     @Test
-    public void testWrongArchiveName() {
+    public void testZipWrongArchiveName() {
         args = new String[]{ch, dir, audio, file3, pic3, pic1, video, "-p", pathToOutputs, wrongArchName1};
         Main.main(args);
         String expected = "Exception while archiving\nInvalid archive name: na/me.zip\r\n";
@@ -129,7 +153,7 @@ public class Tests {
     }
 
     @Test
-    public void testWrongFileNames() {
+    public void testZipWrongFileNames() {
         args = new String[]{wrongFileName1, wrongFileName2, "-p", pathToOutputs, "test3"};
         Main.main(args);
         String expected = """
@@ -144,7 +168,7 @@ public class Tests {
     }
 
     @Test
-    public void testNoNameProvided() {
+    public void testZipNoNameProvided() {
         args = new String[]{pic1, video, "-p", pathToOutputs};
         Main.main(args);
         String expected = """
@@ -155,7 +179,7 @@ public class Tests {
     }
 
     @Test
-    public void testNoPathProvided() {
+    public void testZipNoPathProvided() {
         args = new String[]{pic1, video, "-p", "name"};
         Main.main(args);
         String str = """
@@ -171,4 +195,36 @@ public class Tests {
         String expected = new String(bytes, StandardCharsets.UTF_8);
         assertTrue(compareStr(expected, errContent.toString()));
     }
+
+    @Test
+    public void testUnzip() {
+        args = new String[]{"-u", "-p", pathToOutputs + "unzipped\\", "src/test/resources/output/test2.zip"};
+        Main.main(args);
+        String[] expected = {ch, dir, audio, file3, pic1, pic3, video};
+        assertTrue(checkUnzipped(expected));
+    }
+
+    @Test
+    public void testUnzipNoNameProvided() {
+        args = new String[]{"-u", "-p", pathToOutputs};
+        Main.main(args);
+        String expected = """
+                Exception while archiving
+                Invalid archive name: D:\\Projects\\Java\\zip-archiver-java\\src\\test\\resources\\output\\.zip\r
+                """;
+        assertTrue(compareStr(expected, errContent.toString()));
+    }
+
+    @Test
+    public void testUnzipNoPathProvided() {
+        args = new String[]{"-u", "-p", "test2.zip"};
+        Main.main(args);
+        String expected = """
+                Archive name: test2.zip\r
+                Exception while archiving
+                Wrong input: no path provided\r
+                """;
+        assertTrue(compareStr(expected, errContent.toString()));
+    }
+
 }

@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
-//TODO() тесты
 //TODO() описания функций в javadoc стиле, рефакторинг, тесты
 
 /**
@@ -74,8 +73,8 @@ public class Main {
             return;
         }
         try {
+            setUserArchiveName();
             if (!u) {
-                setUserArchiveName();
                 System.err.println("Archive name set: " + userArchiveName);
                 if (p) {
                     setUserPath();
@@ -94,7 +93,6 @@ public class Main {
                 zipper(filesToZip);
             } else {
                 if (a) throw new IllegalArgumentException("Flag -a when unzipping");
-                setArchiveToUnzipName();
                 System.err.println("Archive name: " + userArchiveName);
                 File destDir;
                 if (p) {
@@ -124,15 +122,11 @@ public class Main {
         System.out.println("Process finished successfully");
     }
 
-    private void setArchiveToUnzipName() {
-        userArchiveName = userInput.get(userInput.size() - 1);
-        userInput.remove(userInput.size() - 1);
-    }
-
     private void setUserArchiveName() {
-        if (!isArchiveNameValid()) throw new IllegalArgumentException("Invalid archive name: " +
+        if (isArchiveNameInvalid()) throw new IllegalArgumentException("Invalid archive name: " +
                 userInput.get(userInput.size() - 1) + ".zip");
-        userArchiveName = userInput.get(userInput.size() - 1) + ".zip";
+        userArchiveName = userInput.get(userInput.size() - 1);
+        if(!u) userArchiveName += ".zip";
         userInput.remove(userInput.size() - 1);
     }
 
@@ -147,18 +141,19 @@ public class Main {
         }
     }
 
-    private boolean isArchiveNameValid() {
+    private boolean isArchiveNameInvalid() {
         String str = userInput.get(userInput.size() - 1);
         if (str == null || str.isEmpty() || str.length() > 255) {
-            return false;
+            return true;
         }
         for (Character ch : getInvalidCharsByOS()) {
-            if (str.contains(ch.toString())) return false;
+            if (str.contains(ch.toString())) return true;
         }
-        return true;
+        return false;
     }
 
     private void setUserPath() {
+        if(userInput.size() == 0) throw new IllegalArgumentException("Wrong input: no path provided");
         userPath = userInput.get(userInput.size() - 1);
         if (userPath.charAt(userPath.length() - 1) != '\\') userPath += '\\';
         if (!Files.exists(Paths.get(userPath))) throw new IllegalArgumentException("Path not found: " + userPath);
