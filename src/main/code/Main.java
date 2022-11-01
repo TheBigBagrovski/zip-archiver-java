@@ -16,12 +16,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
-//TODO() тесты
-//TODO() рефакторинг
-//TODO() тесты
-//todo() unzip
-//todo() slipProtect
 //TODO() тесты
 //TODO() описания функций в javadoc стиле, рефакторинг, тесты
 
@@ -31,19 +27,23 @@ import java.util.zip.ZipOutputStream;
  * -p - unzip archive in selected directory / create zip in selected directory
  * -a - zip all files in current directory
  * -: -a -p (userFileNames) (userPath) userArchiveName
- * -u: -p (userPath) userArchiveName
+ * -u: -p (userFileNames) (userPath) userArchiveName
  */
 public class Main {
 
     public static final Character[] INVALID_WINDOWS_SPECIFIC_CHARS = {':', '/', '\\', '"', '*', '<', '>', '?', '|'};
     public static final Character[] INVALID_UNIX_SPECIFIC_CHARS = {'\000'};
 
+    @SuppressWarnings("unused")
     @Option(name = "-u")
     private boolean u;
+    @SuppressWarnings("unused")
     @Option(name = "-p")
     private boolean p;
+    @SuppressWarnings("unused")
     @Option(name = "-a")
     private boolean a;
+    @SuppressWarnings("unused")
     @Argument(required = true)
     private List<String> userInput;
 
@@ -52,6 +52,16 @@ public class Main {
 
     public static void main(String[] args) {
         new Main().launch(args);
+    }
+
+    private static File newFile(File destinationDir, ZipEntry zipEntry) throws IOException {
+        File destFile = new File(destinationDir, zipEntry.getName());
+        String destDirPath = destinationDir.getCanonicalPath();
+        String destFilePath = destFile.getCanonicalPath();
+        if (!destFilePath.startsWith(destDirPath + File.separator)) {
+            throw new IOException("Entry is outside of the target dir: " + zipEntry.getName());
+        }
+        return destFile;
     }
 
     private void launch(String[] args) {
@@ -73,17 +83,30 @@ public class Main {
                 } else {
                     System.err.println("Archive will be created in current working directory");
                 }
-                zipper();
+                List<File> filesToZip = new ArrayList<>();
+                if (a) {
+                    if (!userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: -a with files");
+                    getFilesInCurrentDir(filesToZip);
+                } else {
+                    if (userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: no files provided");
+                    getExistingFilesFromUserInput(filesToZip);
+                }
+                zipper(filesToZip);
             } else {
-                setUserArchiveName();
+                if (a) throw new IllegalArgumentException("Flag -a when unzipping");
+                setArchiveToUnzipName();
                 System.err.println("Archive name: " + userArchiveName);
+                File destDir;
                 if (p) {
                     setUserPath();
+                    destDir = new File(userPath);
                     System.err.println("Archive will be unpacked in directory: " + userPath);
                 } else {
+                    destDir = new File(System.getProperty("user.dir"));
                     System.err.println("Archive will be unpacked in current working directory");
                 }
-                unzipper();
+                File archive = getExistingFile(userArchiveName);
+                unzip(destDir, archive);
             }
         } catch (Exception e) {
             System.err.println("Exception while archiving\n" + e.getMessage());
@@ -99,6 +122,11 @@ public class Main {
 
     private void printSuccess() {
         System.out.println("Process finished successfully");
+    }
+
+    private void setArchiveToUnzipName() {
+        userArchiveName = userInput.get(userInput.size() - 1);
+        userInput.remove(userInput.size() - 1);
     }
 
     private void setUserArchiveName() {
@@ -137,21 +165,13 @@ public class Main {
         userInput.remove(userInput.size() - 1);
     }
 
-    private void zipper() throws IOException, IllegalArgumentException {
-        List<File> filesToZip = new ArrayList<>();
-        if (a) {
-            if (!userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: -a with files");
-            getFilesInCurrentDir(filesToZip);
-        } else {
-            if (userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: no files provided");
-            getExistingFilesFromUserInput(filesToZip);
-        }
-        System.err.println("Total file size: " + getFilesSize(filesToZip) / 1000 + " kB");
+    private void zipper(List<File> filesToZip) throws IOException, IllegalArgumentException {
+        System.err.println("Total file size: " + getFilesSize(filesToZip) / 1024 + " kB");
         List<String> absPaths = new ArrayList<>();
         List<String> correctNames = new ArrayList<>();
         getListsOfNames(filesToZip, absPaths, correctNames);
         zip(absPaths, correctNames);
-        System.err.println("Archive size: " + new File(userPath + userArchiveName).length() / 1000 + " kB");
+        System.err.println("Archive size: " + new File(userPath + userArchiveName).length() / 1024 + " kB");
     }
 
     private void getFilesInCurrentDir(List<File> filesToZip) throws IOException {
@@ -213,6 +233,7 @@ public class Main {
                 while ((length = fis.read(bytes)) >= 0) {
                     zos.write(bytes, 0, length);
                 }
+                zos.closeEntry();
                 fis.close();
             }
         } catch (IOException e) {
@@ -259,8 +280,36 @@ public class Main {
         return sum;
     }
 
-    private void unzipper() throws IOException {
-        File archive = getExistingFile(userArchiveName);
-        
+    private void unzip(File destDir, File archive) throws IOException {
+        byte[] buffer = new byte[1024];
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(archive))) {
+            ZipEntry zipEntry = zis.getNextEntry();
+            while (zipEntry != null) {
+                File newFile = newFile(destDir, zipEntry);
+                if (zipEntry.isDirectory()) {
+                    if (!newFile.isDirectory() && !newFile.mkdirs()) {
+                        throw new IOException("Failed to create directory: " + newFile);
+                    }
+                } else {
+                    // fix for Windows-created archives
+                    File parent = newFile.getParentFile();
+                    if (!parent.isDirectory() && !parent.mkdirs()) {
+                        throw new IOException("Failed to create directory: " + parent);
+                    }
+                    FileOutputStream fos = new FileOutputStream(newFile);
+                    System.err.println("Unpacking file: " + zipEntry);
+                    int len;
+                    while ((len = zis.read(buffer)) > 0) {
+                        fos.write(buffer, 0, len);
+                    }
+                    fos.close();
+                }
+                zipEntry = zis.getNextEntry();
+            }
+            zis.closeEntry();
+        } catch (IOException e) {
+            throw new IOException("Exception while unzipping:\n" + e.getMessage(), e);
+        }
     }
+
 }
