@@ -31,7 +31,7 @@ import java.util.zip.ZipOutputStream;
  * -p - unzip archive in selected directory / create zip in selected directory
  * -a - zip all files in current directory
  * -: -a -p (userFileNames) (userPath) userArchiveName
- * -u: -p userFileNames (userPath) userArchiveName
+ * -u: -p (userPath) userArchiveName
  */
 public class Main {
 
@@ -64,9 +64,27 @@ public class Main {
             return;
         }
         try {
-            setUserArchiveName();
-            setUserPath();
-            zipper();
+            if (!u) {
+                setUserArchiveName();
+                System.err.println("Archive name set: " + userArchiveName);
+                if (p) {
+                    setUserPath();
+                    System.err.println("Path set: " + userPath);
+                } else {
+                    System.err.println("Archive will be created in current working directory");
+                }
+                zipper();
+            } else {
+                setUserArchiveName();
+                System.err.println("Archive name: " + userArchiveName);
+                if (p) {
+                    setUserPath();
+                    System.err.println("Archive will be unpacked in directory: " + userPath);
+                } else {
+                    System.err.println("Archive will be unpacked in current working directory");
+                }
+                unzipper();
+            }
         } catch (Exception e) {
             System.err.println("Exception while archiving\n" + e.getMessage());
             printFail();
@@ -88,7 +106,6 @@ public class Main {
                 userInput.get(userInput.size() - 1) + ".zip");
         userArchiveName = userInput.get(userInput.size() - 1) + ".zip";
         userInput.remove(userInput.size() - 1);
-        System.err.println("Archive name set: " + userArchiveName);
     }
 
     private Character[] getInvalidCharsByOS() {
@@ -114,34 +131,27 @@ public class Main {
     }
 
     private void setUserPath() {
-        if (p) {
-            userPath = userInput.get(userInput.size() - 1);
-            if (userPath.charAt(userPath.length() - 1) != '\\') userPath += '\\';
-            if (!Files.exists(Paths.get(userPath))) throw new IllegalArgumentException("Path not found: " + userPath);
-            userInput.remove(userInput.size() - 1);
-            System.err.println("Path set: " + userPath);
-        } else {
-            System.err.println("Archive will be created in current working directory");
-        }
+        userPath = userInput.get(userInput.size() - 1);
+        if (userPath.charAt(userPath.length() - 1) != '\\') userPath += '\\';
+        if (!Files.exists(Paths.get(userPath))) throw new IllegalArgumentException("Path not found: " + userPath);
+        userInput.remove(userInput.size() - 1);
     }
 
     private void zipper() throws IOException, IllegalArgumentException {
-        if (!u) {
-            List<File> filesToZip = new ArrayList<>();
-            if (a) {
-                if (!userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: -a with files");
-                getFilesInCurrentDir(filesToZip);
-            } else {
-                if (userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: no files provided");
-                getExistingFilesFromUserInput(filesToZip);
-            }
-            System.err.println("Total file size: " + getFilesSize(filesToZip) / 1000 + " kB");
-            List<String> absPaths = new ArrayList<>();
-            List<String> correctNames = new ArrayList<>();
-            getListsOfNames(filesToZip, absPaths, correctNames);
-            zip(absPaths, correctNames);
-            System.err.println("Archive size: " + new File(userPath + userArchiveName).length() / 1000 + " kB");
+        List<File> filesToZip = new ArrayList<>();
+        if (a) {
+            if (!userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: -a with files");
+            getFilesInCurrentDir(filesToZip);
+        } else {
+            if (userInput.isEmpty()) throw new IllegalArgumentException("Wrong input: no files provided");
+            getExistingFilesFromUserInput(filesToZip);
         }
+        System.err.println("Total file size: " + getFilesSize(filesToZip) / 1000 + " kB");
+        List<String> absPaths = new ArrayList<>();
+        List<String> correctNames = new ArrayList<>();
+        getListsOfNames(filesToZip, absPaths, correctNames);
+        zip(absPaths, correctNames);
+        System.err.println("Archive size: " + new File(userPath + userArchiveName).length() / 1000 + " kB");
     }
 
     private void getFilesInCurrentDir(List<File> filesToZip) throws IOException {
@@ -247,5 +257,10 @@ public class Main {
             }
         }
         return sum;
+    }
+
+    private void unzipper() throws IOException {
+        File archive = getExistingFile(userArchiveName);
+        
     }
 }
