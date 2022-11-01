@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -80,8 +81,6 @@ public class Tests {
     }
 
     private boolean compareStr(String exp, String act) {
-        System.out.println(exp);
-        System.out.println(act);
         for (int i = 0; i < exp.length(); i++) {
             if (exp.charAt(i) != act.charAt(i)) return false;
         }
@@ -141,6 +140,35 @@ public class Tests {
                 Exception while searching files: D:\\Projects\\Java\\zip-archiver-java\\src\\test\\resources\\input\\vide/o.mp4
                 No such file: D:\\Projects\\Java\\zip-archiver-java\\src\\test\\resources\\input\\vide/o.mp4\r
                 """;
+        assertTrue(compareStr(expected, errContent.toString()));
+    }
+
+    @Test
+    public void testNoNameProvided() {
+        args = new String[]{pic1, video, "-p", pathToOutputs};
+        Main.main(args);
+        String expected = """
+                Exception while archiving
+                Invalid archive name: D:\\Projects\\Java\\zip-archiver-java\\src\\test\\resources\\output\\.zip\r
+                """;
+        assertTrue(compareStr(expected, errContent.toString()));
+    }
+
+    @Test
+    public void testNoPathProvided() {
+        args = new String[]{pic1, video, "-p", "name"};
+        Main.main(args);
+        String str = """
+                Archive name set: name.zip\r
+                Path set: D:\\Projects\\Java\\zip-archiver-java\\src\\test\\resources\\input\\video.mp4\\\r
+                Searching file: D:\\Projects\\Java\\zip-archiver-java\\src\\test\\resources\\input\\pic1.png\r
+                Total file size: 2 kB\r
+                Exception while archiving
+                Exception while adding files to zip:
+                D:\\Projects\\Java\\zip-archiver-java\\src\\test\\resources\\input\\video.mp4\\name.zip (Системе не удается найти указанный путь)\r
+                """;
+        byte[] bytes = str.getBytes();
+        String expected = new String(bytes, StandardCharsets.UTF_8);
         assertTrue(compareStr(expected, errContent.toString()));
     }
 }
